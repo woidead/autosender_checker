@@ -61,3 +61,58 @@ class Proxy:
                 return "", ""
 
 
+async def authorize(tname,proxy):
+    try:
+        tdesk = TDesktop(f"tdatas/{tname}")
+    except Exception as e:
+        logging.error(f"Невозможно создать tdesk!: {e}")
+        sys.exit(1)
+    
+    api = API.TelegramIOS.Generate()
+    prox = Proxy()
+    addr, port, username, password = prox.get_proxy(proxy)
+    proxy_conn = (socks.SOCKS5, addr, int(port), True, username, password)
+    logging.info(f"{tname} | Прокси: {addr}:{port}:{username}:{password}")
+    logging.info(f"{tname} | Авторизация")
+    try:
+        if f"{tname}.session" in os.listdir("sessions/"):
+            os.remove(f"sessions/{tname}.session")
+    except Exception as e:
+        print(e)
+
+    if addr == "" or port == "":
+        try:
+            client = await tdesk.ToTelethon(
+                f"sessions/{tname}.session",
+                UseCurrentSession,
+                api,
+            )
+            await client.connect()
+        except Exception as e:
+            logging.error(f"Неудалось авторизоваться в аккаунт без прокси!{e}")
+            return
+    else:
+        try:
+            client = await tdesk.ToTelethon(
+                f"sessions/{tname}.session",
+                UseCurrentSession,
+                api,
+                proxy=proxy_conn,
+                connection_retries=0,
+                retry_delay=1,
+                auto_reconnect=True,
+                request_retries=0,
+            )
+            await client.connect()
+        except Exception as e:
+            sentry_sdk.capture_exception(e)
+            if "ConnectionError" in str(e):
+                logging.warning(f"{tname} | Нерабочие прокси: {addr}:{port}:{username}:{password}")
+                logging.info(f"{tname} | Заменяем прокси")
+                return authorize(proxy + 1, tname)
+            else:
+                logging.error(f"Неудалось авторизоваться с прокси: {e}")
+                await client.disconnect()
+                return
+            
+    return client
