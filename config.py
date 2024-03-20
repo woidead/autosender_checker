@@ -1,3 +1,5 @@
-proxy_type = 1
-timeout = 30
-chats = []
+from random import randint
+proxy_type = 2
+timeout = randint(8,13)
+chats = ['woidead']
+message = 'Yo!'

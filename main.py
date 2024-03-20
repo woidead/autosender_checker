@@ -1,18 +1,9 @@
 import asyncio
-import configparser
-import datetime
+from datetime import datetime
 import logging
 import os
-import shutil
 import sys
-import threading
-import time
-import pytz
-import tkinter as tk
-from datetime import datetime, timedelta
-from random import randint
-from threading import Thread
-from tkinter import messagebox, ttk
+from random import randint, shuffle
 
 import requests
 import sentry_sdk
@@ -26,32 +17,47 @@ from opentele.api import API, CreateNewSession, UseCurrentSession
 from opentele.td import TDesktop
 from opentele.tl import TelegramClient
 
-from config import (proxy_type, chats, timeout)
+from config import (proxy_type, chats, timeout, message)
 
+log_directory = "logs"
+if not os.path.exists(log_directory):
+    os.makedirs(log_directory)
 
+# Форматируем имя файла лога с текущим временем
+current_time = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+log_filename = f"{log_directory}/log_{current_time}.log"
+
+# Настройка логгера
+logging.basicConfig(level=logging.INFO,
+                    format='%(asctime)s - %(levelname)s - %(message)s',
+                    handlers=[
+                        logging.FileHandler(log_filename),
+                        logging.StreamHandler()
+                    ])
 class Proxy:
         """Класс для работы с прокси."""
 
         def __init__(self):
             self.proxy_type = int(proxy_type)
+            self.index = 0
 
-        def fetch_proxy_from_link(self, link, index):
+        def fetch_proxy_from_link(self, link):
             proxies = requests.get(link)
-            proxy = proxies.text.split("\n")[index].split(":")
+            proxy = proxies.text.split("\n")[self.index].split(":")
             addr = proxy[0]
             port = proxy[1]
             login = proxy[2]
             password = proxy[3]
             return addr, int(port), login, password
 
-        def get_proxy(self, index):
+        def get_proxy(self):
             logging.warning(f"proxy type {self.proxy_type}")
             if self.proxy_type == 0:
                 link = open("proxy.txt", "r").read().strip()
-                return self.fetch_proxy_from_link(link, index)
+                return self.fetch_proxy_from_link(link)
             if self.proxy_type == 1:
                 proxies = open("proxy.txt", "r").read().split("\n")
-                proxy = proxies[index].split(":")
+                proxy = proxies[self.index].split(":")
                 addr = proxy[0]
                 port = proxy[1]
                 login = proxy[2]
@@ -61,7 +67,7 @@ class Proxy:
                 return "", ""
 
 
-async def authorize(tname,proxy):
+async def authorize(tname):
     try:
         tdesk = TDesktop(f"tdatas/{tname}")
     except Exception as e:
@@ -70,9 +76,14 @@ async def authorize(tname,proxy):
     
     api = API.TelegramIOS.Generate()
     prox = Proxy()
-    addr, port, username, password = prox.get_proxy(proxy)
-    proxy_conn = (socks.SOCKS5, addr, int(port), True, username, password)
-    logging.info(f"{tname} | Прокси: {addr}:{port}:{username}:{password}")
+    try:
+        addr, port, username, password = prox.get_proxy()
+        proxy_conn = (socks.SOCKS5, addr, int(port), True, username, password)
+        logging.info(f"{tname} | Прокси: {addr}:{port}:{username}:{password}")
+    except:
+        addr, port = prox.get_proxy()
+        proxy_conn = (socks.SOCKS5, addr, (port), True)
+        logging.info(f"{tname} | Прокси: {addr}:{port}")
     logging.info(f"{tname} | Авторизация")
     try:
         if f"{tname}.session" in os.listdir("sessions/"):
@@ -89,7 +100,7 @@ async def authorize(tname,proxy):
             )
             await client.connect()
         except Exception as e:
-            logging.error(f"Неудалось авторизоваться в аккаунт без прокси!{e}")
+            logging.error(f"Неудалось авторизоваться в аккаунт без прокси!: {e}")
             return
     else:
         try:
@@ -109,10 +120,67 @@ async def authorize(tname,proxy):
             if "ConnectionError" in str(e):
                 logging.warning(f"{tname} | Нерабочие прокси: {addr}:{port}:{username}:{password}")
                 logging.info(f"{tname} | Заменяем прокси")
-                return authorize(proxy + 1, tname)
+                return authorize(tname)
             else:
                 logging.error(f"Неудалось авторизоваться с прокси: {e}")
                 await client.disconnect()
                 return
             
     return client
+
+
+async def send_msg(client, chat_id, message):
+    try:
+        await client.send_message(chat_id, message)
+        logging.info(f"Сообщение '{message}' отправлено в чат {chat_id}")
+    except Exception as e:
+        logging.error(f"Ошибка при отправке сообщения в send_msg в чат {chat_id}: {e}")
+
+async def check_all_messages(client):
+    checks = {}
+    try:
+        dialogs = await client.get_dialogs(limit=10, folder=0)
+        for dialog in dialogs:
+            
+            if isinstance(dialog.entity, User) and dialog.entity.username in chats:
+                if dialog.unread_count > 0:
+                    logging.info(f"Есть непрочитанные сообщения от {dialog.entity.username}.")
+                    checks[str(dialog.entity.username)] = True
+                else:
+                    checks[str(dialog.entity.username)] = False
+        return checks
+    except Exception as e:
+        logging.error(f"Ошибка при get_dialogs в check_all_messages: {e}")
+    
+
+
+async def main(tdataname):
+    shuffle(chats)
+    try:
+        client = await authorize(tdataname)
+    except Exception as e:
+        logging.error(f"Ошибка при создании client в main: {e}")
+        
+    for chat in chats:
+        try:
+            await send_msg(client, chat, message)
+            logging.info(f"Оправлено сообщение в {chat}")
+        except Exception as e:
+            logging.error(f"Ошибка при отправке сообщения в main: {e}")
+        await asyncio.sleep(timeout)
+    await asyncio.sleep(30)
+    
+    logging.info(await check_all_messages(client))
+
+    
+
+async def start():
+    try:
+        os.remove("./tdatas/.gitkeep")
+    except:  
+        pass
+    tdataname = os.listdir("./tdatas")[0]
+    logging.info(f"{'./tdatas'}//{tdataname} working")
+    await main(tdataname)
+
+asyncio.run(start())
