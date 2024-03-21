@@ -4,7 +4,7 @@ import requests
 import logging
 import os
 import sys
-from random import shuffle
+from random import shuffle, uniform
 
 
 import socks
@@ -23,11 +23,9 @@ log_directory = "logs"
 if not os.path.exists(log_directory):
     os.makedirs(log_directory)
 
-# Форматируем имя файла лога с текущим временем
 current_time = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
 log_filename = f"{log_directory}/log_{current_time}.log"
 
-# Настройка логгера
 logging.basicConfig(level=logging.INFO,
                     format='%(asctime)s - %(levelname)s - %(message)s',
                     handlers=[
@@ -46,28 +44,21 @@ class Proxy:
         def fetch_proxy_from_link(self, link):
             proxies = requests.get(link)
             proxy = proxies.text.split("\n")[self.index].split(":")
-            addr = proxy[0]
-            port = proxy[1]
-            login = proxy[2]
-            password = proxy[3]
+            addr, port, login, password = proxy[0], proxy[1], proxy[2], proxy[3]
             return addr, int(port), login, password
 
         def get_proxy(self):
-            logging.warning(f"proxy type {self.proxy_type}")
+            logging.info(f"proxy type {self.proxy_type}")
             if self.proxy_type == 0:
                 link = open("proxy.txt", "r").read().strip()
                 return self.fetch_proxy_from_link(link)
-            if self.proxy_type == 1:
+            elif self.proxy_type == 1:
                 proxies = open("proxy.txt", "r").read().split("\n")
                 proxy = proxies[self.index].split(":")
-                addr = proxy[0]
-                port = proxy[1]
-                login = proxy[2]
-                password = proxy[3]
+                addr, port, login, password = proxy[0], proxy[1], proxy[2], proxy[3]
                 return addr, int(port), login, password
-            if self.proxy_type == 2:
-                return "", ""
-
+            else:
+                return "", "", "", ""
 
 async def authorize(tname):
     try:
@@ -78,15 +69,8 @@ async def authorize(tname):
     
     api = API.TelegramIOS.Generate()
     prox = Proxy()
-    try:
-        addr, port, username, password = prox.get_proxy()
-        proxy_conn = (socks.SOCKS5, addr, int(port), True, username, password)
-        logging.info(f"{tname} | Прокси: {addr}:{port}:{username}:{password}")
-    except:
-        addr, port = prox.get_proxy()
-        proxy_conn = (socks.SOCKS5, addr, (port), True)
-        logging.info(f"{tname} | Прокси: {addr}:{port}")
-    logging.info(f"{tname} | Авторизация")
+    addr, port, username, password = prox.get_proxy()
+    
     try:
         if f"{tname}.session" in os.listdir("sessions/"):
             os.remove(f"sessions/{tname}.session")
@@ -94,6 +78,7 @@ async def authorize(tname):
         print(e)
 
     if addr == "" or port == "":
+        logging.warning(f"{tname} | Авторизация без прокси")
         try:
             client = await tdesk.ToTelethon(
                 f"sessions/{tname}.session",
@@ -105,6 +90,9 @@ async def authorize(tname):
             logging.error(f"Неудалось авторизоваться в аккаунт без прокси!: {e}")
             return
     else:
+        proxy_conn = (socks.SOCKS5, addr, int(port), True, username, password)
+        logging.info(f"{tname} | Прокси: {addr}:{port}:{username}:{password}")
+        logging.info(f"{tname} | Авторизация")
         try:
             client = await tdesk.ToTelethon(
                 f"sessions/{tname}.session",
@@ -142,13 +130,14 @@ async def send_msg(client, chat_id, message):
 async def check_all_messages(client):
     checks = {}
     try:
-        dialogs = await client.get_dialogs(limit=10, folder=0)
+        dialogs = await client.get_dialogs(limit=10)
+        await asyncio.sleep(round(uniform(1,3), 2))
         for dialog in dialogs:
-            
             if isinstance(dialog.entity, User) and dialog.entity.username in chats:
                 if dialog.unread_count > 0:
                     logging.info(f"Есть непрочитанные сообщения от {dialog.entity.username}.")
                     checks[str(dialog.entity.username)] = True
+                    await asyncio.sleep(round(uniform(1,3), 2))
                 else:
                     checks[str(dialog.entity.username)] = False
         return checks
@@ -161,6 +150,7 @@ async def main(tdataname):
     shuffle(chats)
     try:
         client = await authorize(tdataname)
+        await asyncio.sleep(round(uniform(1,3), 2))
     except Exception as e:
         logging.error(f"Ошибка при создании client в main: {e}")
         
@@ -168,10 +158,11 @@ async def main(tdataname):
         try:
             await send_msg(client, chat, message)
             logging.info(f"Оправлено сообщение в {chat}")
+            await asyncio.sleep(round(uniform(1,3), 2))
         except Exception as e:
             logging.error(f"Ошибка при отправке сообщения в main: {e}")
         await asyncio.sleep(timeout)
-    await asyncio.sleep(30)
+    await asyncio.sleep(10)
     
     logging.info(await check_all_messages(client))
 
