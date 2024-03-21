@@ -4,7 +4,7 @@ __pycache__/
 *$py.class
 test.py
 tdata/
-*session
+*.session*
 # C extensions
 *.so
 

@@ -1,19 +1,19 @@
 import asyncio
 from datetime import datetime
+import requests
 import logging
 import os
 import sys
-from random import randint, shuffle
+from random import shuffle
 
-import requests
-import sentry_sdk
+
 import socks
 from sentry_sdk.integrations.logging import LoggingIntegration
 from telethon import TelegramClient, events, sync
 from telethon.errors import FloodWaitError
 from telethon.tl.types import PeerChannel, PeerChat, PeerUser, User, MessageActionContactSignUp
 
-from opentele.api import API, CreateNewSession, UseCurrentSession
+from opentele.api import API, UseCurrentSession
 from opentele.td import TDesktop
 from opentele.tl import TelegramClient
 
@@ -34,6 +34,8 @@ logging.basicConfig(level=logging.INFO,
                         logging.FileHandler(log_filename),
                         logging.StreamHandler()
                     ])
+
+
 class Proxy:
         """Класс для работы с прокси."""
 
@@ -116,7 +118,6 @@ async def authorize(tname):
             )
             await client.connect()
         except Exception as e:
-            sentry_sdk.capture_exception(e)
             if "ConnectionError" in str(e):
                 logging.warning(f"{tname} | Нерабочие прокси: {addr}:{port}:{username}:{password}")
                 logging.info(f"{tname} | Заменяем прокси")
@@ -131,6 +132,8 @@ async def authorize(tname):
 
 async def send_msg(client, chat_id, message):
     try:
+        await client.delete_dialog(chat_id, revoke=True)
+        logging.info(f"История чата с {chat_id} удалена.")
         await client.send_message(chat_id, message)
         logging.info(f"Сообщение '{message}' отправлено в чат {chat_id}")
     except Exception as e:
