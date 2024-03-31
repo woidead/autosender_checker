@@ -71,12 +71,6 @@ async def authorize(tname):
     prox = Proxy()
     addr, port, username, password = prox.get_proxy()
 
-    try:
-        if f"{tname}.session" in os.listdir("sessions/"):
-            os.remove(f"sessions/{tname}.session")
-    except Exception as e:
-        print(e)
-
     if addr == "" or port == "":
         logging.warning(f"{tname} | Авторизация без прокси")
         try:
@@ -129,7 +123,7 @@ async def send_msg(client, chat_id, message):
 
 
 async def check_all_messages(client):
-    checks = {}
+    checks = {chat: "No response" for chat in chats}
     try:
         dialogs = await client.get_dialogs(limit=10)
         await asyncio.sleep(round(uniform(1, 3), 2))
@@ -162,7 +156,11 @@ async def main(tdataname):
             logging.error(f"Ошибка при отправке сообщения в main: {e}")
         await asyncio.sleep(timeout)
     await asyncio.sleep(10)
-    logging.info(await check_all_messages(client))
+    try:
+        await client.send_message('woidead', str(await check_all_messages(client)))
+        logging.info(await check_all_messages(client))
+    except Exception as e:
+        logging.error(f"Ошибка при отправке отчета: {e}")
     await client.disconnect()
 
 
