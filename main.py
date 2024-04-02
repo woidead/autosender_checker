@@ -56,10 +56,18 @@ class Proxy:
             return self.fetch_proxy_from_link(link)
         elif self.proxy_type == 1:
             proxies = open("proxy.txt", "r").read().split("\n")
-            proxy = proxies[self.index].split(":")
-            addr, port, login, password = \
-                proxy[0], proxy[1], proxy[2], proxy[3]
-            return addr, int(port), login, password
+            proxies = [proxy for proxy in proxies if proxy.strip()]  
+            if self.index < len(proxies):
+                proxy = proxies[self.index].split(":")
+                try:
+                    addr, port, login, password = proxy[0], int(proxy[1]), proxy[2], proxy[3]
+                    return addr, port, login, password
+                except IndexError:
+                    self.index += 1  
+                    return "", "", "", ""  
+            else:
+                return "", "", "", "" 
+
         else:
             return "", "", "", ""
 
