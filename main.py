@@ -4,6 +4,7 @@ import requests
 import logging
 import os
 import sys
+import pytz
 from random import shuffle, uniform
 
 
@@ -13,8 +14,11 @@ from telethon.tl.types import User
 
 from opentele.api import API, UseCurrentSession
 from opentele.td import TDesktop
+from telethon import functions
+from telethon.errors import UserAlreadyParticipantError
+from telethon.tl.functions.channels import JoinChannelRequest
 
-from config import (proxy_type, chats, timeout, message, interval)
+from config import (proxy_type, chats, timeout, message, interval, report_chat)
 
 log_directory = "logs"
 if not os.path.exists(log_directory):
@@ -157,8 +161,25 @@ async def main(tdataname):
         await asyncio.sleep(timeout)
     await asyncio.sleep(10)
     try:
-        await client.send_message('woidead', str(await check_all_messages(client)))
-        logging.info(await check_all_messages(client))
+        if report_chat.startswith("https://t.me/+"):
+            hash = report_chat.split("+")[1]
+            await client(functions.messages.ImportChatInviteRequest(
+                hash=hash
+            ))
+        else:
+            statchat = await client.get_entity(report_chat)
+            await client(JoinChannelRequest(statchat))
+        logging.info(f"Успешно вошел в чат{report_chat}")
+    except UserAlreadyParticipantError:
+        pass
+    except Exception as e:
+        logging.error(f"Ошибка при входе в чат отчет акком: {e}")
+    try:
+        dictionary = await check_all_messages(client)
+        lines = [f"{key} : {value}" for key, value in dictionary.items()]
+        report = f"Отчет на {datetime.now(pytz.timezone('Etc/GMT-3'))}" + "\n".join(lines)
+        await client.send_message(report_chat, report)
+        logging.info(dictionary)
     except Exception as e:
         logging.error(f"Ошибка при отправке отчета: {e}")
     await client.disconnect()
