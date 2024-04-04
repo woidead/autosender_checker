@@ -30,7 +30,7 @@ log_filename = f"{log_directory}/log_{current_time}.log"
 logging.basicConfig(level=logging.INFO,
                     format='%(asctime)s - %(levelname)s - %(message)s',
                     handlers=[
-                        logging.FileHandler(log_filename),
+                        logging.FileHandler(log_filename, encoding='utf-8'),
                         logging.StreamHandler()
                     ])
 
@@ -138,13 +138,13 @@ async def check_all_messages(client):
     checks = {chat: "No response" for chat in chats}
     try:
         dialogs = await client.get_dialogs(limit=10)
-        await asyncio.sleep(round(uniform(1, 3), 2))
+        await asyncio.sleep(round(uniform(13, 20), 2))
         for dialog in dialogs:
             if isinstance(dialog.entity, User) and dialog.entity.username in chats:
                 if dialog.unread_count > 0:
                     logging.info(f"Есть непрочитанные сообщения от {dialog.entity.username}.")
                     checks[str(dialog.entity.username)] = True
-                    await asyncio.sleep(round(uniform(1, 3), 2))
+                    await asyncio.sleep(round(uniform(13, 20), 2))
                 else:
                     checks[str(dialog.entity.username)] = False
         return checks
@@ -156,14 +156,14 @@ async def main(tdataname):
     shuffle(chats)
     try:
         client = await authorize(tdataname)
-        await asyncio.sleep(round(uniform(1, 3), 2))
+        await asyncio.sleep(round(uniform(13, 20), 2))
     except Exception as e:
         logging.error(f"Ошибка при создании client в main: {e}")
     for chat in chats:
         try:
             await send_msg(client, chat, message)
             logging.info(f"Оправлено сообщение в {chat}")
-            await asyncio.sleep(round(uniform(1, 3), 2))
+            await asyncio.sleep(round(uniform(23, 40), 2))
         except Exception as e:
             logging.error(f"Ошибка при отправке сообщения в main: {e}")
         await asyncio.sleep(timeout)
@@ -185,7 +185,7 @@ async def main(tdataname):
     try:
         dictionary = await check_all_messages(client)
         lines = [f"{key} : {value}" for key, value in dictionary.items()]
-        report = f"Отчет на {datetime.now(pytz.timezone('Etc/GMT-3'))}" + "\n".join(lines)
+        report = f"Отчет на {datetime.now(pytz.timezone('Etc/GMT-3'))}\n" + "\n".join(lines)
         await client.send_message(report_chat, report)
         logging.info(dictionary)
     except Exception as e:
