@@ -137,7 +137,7 @@ async def send_msg(client, chat_id, message):
 async def check_all_messages(client):
     checks = {chat: "No response" for chat in chats}
     try:
-        dialogs = await client.get_dialogs(limit=10)
+        dialogs = await client.get_dialogs(limit=30)
         await asyncio.sleep(round(uniform(23, 40), 2))
         for dialog in dialogs:
             if isinstance(dialog.entity, User) and dialog.entity.username in chats:
